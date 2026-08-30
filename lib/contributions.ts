@@ -1,32 +1,55 @@
 import { rngFromSeed } from "./random";
-import type { Contribution, ContributionsResponse, Level } from "./types";
+import {
+  monthsForRange,
+  type Contribution,
+  type ContributionsResponse,
+  type Level,
+  type RangeKey,
+} from "./types";
 
 const API_BASE = "https://github-contributions-api.jogruber.de/v4";
+const REQUEST_TIMEOUT_MS = 8000;
 
 export type FetchResult =
-  | { ok: true; contributions: Contribution[]; total: number; mock: boolean }
+  | {
+      ok: true;
+      /** The full past-year window; trim with `sliceRange` for a shorter view. */
+      contributions: Contribution[];
+      mock: boolean;
+    }
   | { ok: false; reason: "not-found" }
   | { ok: false; reason: "error"; message: string };
 
 /**
- * `?y=last` is required: the API defaults to y=all, which returns every year the
- * account has existed. `revalidate: 3600` matches the API's own one-hour cache,
- * so we don't layer a second cache on top of it.
+ * Always fetch the full rolling year and narrow it locally: the range selector
+ * is a view over one dataset, so switching from 12 months to 3 shouldn't cost
+ * another round trip.
+ *
+ * `?y=last` is required — the API defaults to `y=all`, which returns every year
+ * the account has existed. `revalidate: 3600` matches the API's own one-hour
+ * cache, so we don't layer a second cache on top of it.
  */
 export async function fetchContributions(
   username: string,
 ): Promise<FetchResult> {
   let res: Response;
   try {
-    res = await fetch(
-      `${API_BASE}/${encodeURIComponent(username)}?y=last`,
-      { next: { revalidate: 3600 } },
-    );
+    res = await fetch(`${API_BASE}/${encodeURIComponent(username)}?y=last`, {
+      next: { revalidate: 3600 },
+      // The upstream API intermittently hangs rather than erroring. Without a
+      // bound the page just sits there; better to fail fast and fall back.
+      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+    });
   } catch (err) {
+    const timedOut = err instanceof Error && err.name === "TimeoutError";
     return {
       ok: false,
       reason: "error",
-      message: err instanceof Error ? err.message : "Network request failed",
+      message: timedOut
+        ? "The contributions API took too long to respond."
+        : err instanceof Error
+          ? err.message
+          : "Network request failed",
     };
   }
 
@@ -53,21 +76,49 @@ export async function fetchContributions(
   // The API answers 200 with an empty set for some non-existent users.
   if (contributions.length === 0) return { ok: false, reason: "not-found" };
 
-  return {
-    ok: true,
-    contributions,
-    total: sumCounts(contributions),
-    mock: false,
-  };
-}
-
-function sumCounts(contributions: Contribution[]): number {
-  return contributions.reduce((acc, c) => acc + c.count, 0);
+  return { ok: true, contributions, mock: false };
 }
 
 /**
- * Seeded stand-in for the API, in the exact same per-day shape. Lets the scene
- * be developed and demoed with the API unreachable or rate-limited (`?mock=1`).
+ * Trailing slice of the year, aligned to the start of the month so the panel
+ * layouts always show whole months.
+ */
+export function sliceRange(
+  contributions: Contribution[],
+  range: RangeKey,
+): Contribution[] {
+  const months = monthsForRange(range);
+  if (months >= 12 || contributions.length === 0) return contributions;
+
+  const last = contributions[contributions.length - 1];
+  const end = new Date(`${last.date}T00:00:00Z`);
+
+  const start = new Date(
+    Date.UTC(end.getUTCFullYear(), end.getUTCMonth() - (months - 1), 1),
+  );
+  const cutoff = start.toISOString().slice(0, 10);
+
+  return contributions.filter((c) => c.date >= cutoff);
+}
+
+export function sumCounts(contributions: Contribution[]): number {
+  return contributions.reduce((acc, c) => acc + c.count, 0);
+}
+
+/** Highest single-day count in the window, for the stats panel. */
+export function bestDay(
+  contributions: Contribution[],
+): Contribution | null {
+  let best: Contribution | null = null;
+  for (const c of contributions) {
+    if (!best || c.count > best.count) best = c;
+  }
+  return best && best.count > 0 ? best : null;
+}
+
+/**
+ * Seeded stand-in for the API, in the exact same per-day shape. Used
+ * automatically when the API is unreachable, so the page always has a forest.
  */
 export function mockContributions(username: string): FetchResult {
   const rng = rngFromSeed(`mock:${username}`);
@@ -82,7 +133,8 @@ export function mockContributions(username: string): FetchResult {
   const counts: number[] = [];
   for (let d = new Date(start); d <= end; d.setUTCDate(d.getUTCDate() + 1)) {
     const day = d.getUTCDay();
-    // Weekends are quieter, and a slow seasonal swell keeps beds from looking uniform.
+    // Weekends are quieter, and a slow seasonal swell keeps months from looking
+    // uniform.
     const weekend = day === 0 || day === 6 ? 0.35 : 1;
     const seasonal =
       0.6 + 0.4 * Math.sin((d.getUTCMonth() / 12) * Math.PI * 2 + 1.2);
@@ -105,12 +157,7 @@ export function mockContributions(username: string): FetchResult {
     c.level = levels[i];
   });
 
-  return {
-    ok: true,
-    contributions,
-    total: sumCounts(contributions),
-    mock: true,
-  };
+  return { ok: true, contributions, mock: true };
 }
 
 /**
