@@ -1,26 +1,133 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
-
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --font-sans: var(--font-chivo-mono);
+  --font-mono: var(--font-chivo-mono);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+/*
+ * UI theme tokens, driven by the day/night toggle rather than the OS setting —
+ * the chrome should match the scene behind it, not the system preference.
+ *
+ * `data-theme` is set on <html> by AppShell. Day is the default so the markup
+ * is correct before hydration.
+ */
+:root {
+  --ui-fg: #0c1f14;
+  --ui-fg-muted: #40614c;
+  --ui-surface: #f4f7f0;
+  --ui-surface-solid: #f4f7f0;
+  --ui-border: #0c1f14;
+  --ui-hover: #dfe8d8;
+  --ui-accent: #0c1f14;
+  --ui-accent-fg: #f4f7f0;
+  --ui-scrim: rgb(12 31 20 / 0.5);
+  /* Neobrutalist offset shadow — a hard block, never a blur. */
+  --ui-shadow: 4px 4px 0 0 var(--ui-border);
+  --ui-shadow-lg: 8px 8px 0 0 var(--ui-border);
+}
+
+[data-theme="night"] {
+  --ui-fg: #e8f5e4;
+  --ui-fg-muted: #8fae95;
+  --ui-surface: #101f30;
+  --ui-surface-solid: #0b1526;
+  --ui-border: #e8f5e4;
+  --ui-hover: #1c3145;
+  --ui-accent: #8fd96a;
+  --ui-accent-fg: #0b1526;
+  --ui-scrim: rgb(4 10 18 / 0.6);
+}
+
+html,
+body {
+  height: 100%;
+  background: var(--ui-surface-solid);
+  color: var(--ui-fg);
+  font-family: var(--font-chivo-mono), ui-monospace, monospace;
+  overscroll-behavior: none;
+}
+
+/*
+ * Every surface in the app: sharp corners, a hard 2px border, and a solid
+ * offset shadow. Defined once here so the look stays consistent and the
+ * day/night swap animates in step with the scene's ~700ms palette tween.
+ */
+/*
+ * Declared in a layer so Tailwind utilities always win: a `bg-(--ui-accent)`
+ * on a `.brut` element must override the default surface, not lose to it.
+ */
+@layer components {
+  .brut {
+    border: 2px solid var(--ui-border);
+    border-radius: 0;
+    background: var(--ui-surface);
+    box-shadow: var(--ui-shadow);
+    transition:
+      color 700ms ease,
+      background-color 700ms ease,
+      border-color 700ms ease,
+      box-shadow 700ms ease;
   }
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+.brut-lg {
+  box-shadow: var(--ui-shadow-lg);
+}
+
+/* Pressable controls shift into their own shadow. */
+.brut-press {
+  transition:
+    transform 80ms ease,
+    box-shadow 80ms ease,
+    color 700ms ease,
+    background-color 700ms ease,
+    border-color 700ms ease;
+}
+
+.brut-press:active {
+  transform: translate(4px, 4px);
+  box-shadow: 0 0 0 0 var(--ui-border);
+}
+
+/* Colour-only transition for text and bare elements. */
+.brut-theme {
+  transition:
+    color 700ms ease,
+    background-color 700ms ease,
+    border-color 700ms ease;
+}
+
+/*
+ * The 3D canvas and the server-rendered static fallback are BOTH in the initial
+ * HTML. Which one is visible is decided here, in CSS, so reduced-motion users
+ * never see a flash of the canvas and never wait on hydration.
+ */
+.motion-reduce-only {
+  display: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .motion-reduce-hidden {
+    display: none;
+  }
+  .motion-reduce-only {
+    display: block;
+  }
+
+  /* Honour the preference: no easing, and no press travel. */
+  .brut,
+  .brut-press,
+  .brut-theme {
+    transition: none;
+  }
+  .brut-press:active {
+    transform: none;
+  }
+}
+
+/* The canvas handles its own gestures; stop the page from panning under it. */
+canvas {
+  touch-action: none;
+  display: block;
 }
