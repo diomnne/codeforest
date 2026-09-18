@@ -1,9 +1,5 @@
 import type { GardenDay } from "@/lib/layout";
 
-/**
- * Rendered as plain DOM above the canvas rather than as a drei <Html> billboard:
- * it stays legible at any orbit angle and works the same in both layouts.
- */
 export default function Tooltip({
   day,
   x,
@@ -15,7 +11,7 @@ export default function Tooltip({
 }) {
   return (
     <div
-      className="brut pointer-events-none fixed z-20 -translate-x-1/2 -translate-y-[calc(100%+16px)] px-4 py-2 text-xs text-(--ui-fg)"
+      className="brut pointer-events-none fixed z-20 -translate-x-1/2 -translate-y-[calc(100%+16px)] px-4 py-2 text-xs text-(--ui-fg) shadow-none"
       style={{ left: x, top: y }}
       role="status"
     >

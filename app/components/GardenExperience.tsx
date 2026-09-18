@@ -1,25 +1,22 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { Suspense, useMemo, useState, useSyncExternalStore } from "react";
+import { Suspense, useCallback, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { bestDay, sliceRange, sumCounts } from "@/lib/contributions";
 import {
   getReducedMotionServerSnapshot,
   getReducedMotionSnapshot,
   subscribeReducedMotion,
 } from "@/lib/reducedMotion";
-import type { Contribution, Profile, RangeKey } from "@/lib/types";
+import type { Contribution, Profile, RangeKey, TimeOfDay } from "@/lib/types";
 import { useTimeOfDay } from "./AppShell";
 import Controls from "./Controls";
 import LoadingScreen from "./LoadingScreen";
 import MockNotice from "./MockNotice";
 import StatsPanel from "./StatsPanel";
+import StoryModal from "./StoryModal";
+import WelcomeDialog from "./WelcomeDialog";
 
-/**
- * `ssr: false` is only legal inside a Client Component, so the dynamic import
- * lives here rather than in the server page. R3F has no WebGL context on the
- * server, so the canvas must never be prerendered.
- */
 const Garden = dynamic(() => import("./Garden"), {
   ssr: false,
   loading: () => <LoadingScreen />,
@@ -29,10 +26,9 @@ type Props = {
   username: string;
   contributions: Contribution[];
   profile: Profile | null;
-  /** True when `contributions` is generated sample data, not real activity. */
-  mock: boolean;
-  /** Hides the stats panel and controls for the landing page's sample forest. */
-  chromeless?: boolean;
+    mock: boolean;
+    chromeless?: boolean;
+    onGrowAnother?: () => void;
 };
 
 export default function GardenExperience({
@@ -41,31 +37,47 @@ export default function GardenExperience({
   profile,
   mock,
   chromeless = false,
+  onGrowAnother,
 }: Props) {
   const [range, setRange] = useState<RangeKey>("1y");
   const [metricsHidden, setMetricsHidden] = useState(false);
+  const [storyCaptures, setStoryCaptures] = useState<{ day: string; night: string } | null>(null);
+  const [internalGrow, setInternalGrow] = useState(false);
   const timeOfDay = useTimeOfDay();
 
-  // The range selector is a view over one dataset — no refetch, no navigation.
+  const handleGrowAnother = onGrowAnother ?? (() => setInternalGrow(true));
   const visible = useMemo(
     () => sliceRange(contributions, range),
     [contributions, range],
   );
   const total = useMemo(() => sumCounts(visible), [visible]);
   const best = useMemo(() => bestDay(visible), [visible]);
-
-  // The scene always gets the full window and hides days before this date, so
-  // the instance count stays fixed and range changes can animate.
   const visibleFrom = visible.length > 0 ? visible[0].date : "";
-
-  // CSS already hides this subtree under reduced motion, but that only stops it
-  // being *painted* — the canvas would still boot a WebGL context and hold it
-  // for a view nobody sees. Skip mounting it entirely for those users.
   const reducedMotion = useSyncExternalStore(
     subscribeReducedMotion,
     getReducedMotionSnapshot,
     getReducedMotionServerSnapshot,
   );
+  const captureRef = useRef<((override?: TimeOfDay) => string) | null>(null);
+  const onRegisterCapture = useCallback(
+    (fn: (override?: TimeOfDay) => string) => {
+      captureRef.current = fn;
+    },
+    [],
+  );
+
+  function openStory() {
+    const capture = captureRef.current;
+    if (!capture) return;
+    const currentUrl = capture();                                           // current palette, as-is
+    const other: TimeOfDay = timeOfDay === "day" ? "night" : "day";
+    const otherUrl = capture(other);                                        // sync scene patch + render
+    setStoryCaptures(
+      timeOfDay === "day"
+        ? { day: currentUrl, night: otherUrl }
+        : { day: otherUrl, night: currentUrl },
+    );
+  }
 
   return (
     <div className="relative h-full w-full">
@@ -76,6 +88,7 @@ export default function GardenExperience({
             contributions={contributions}
             visibleFrom={visibleFrom}
             timeOfDay={timeOfDay}
+            onRegisterCapture={onRegisterCapture}
           />
         </Suspense>
       )}
@@ -84,30 +97,49 @@ export default function GardenExperience({
         <>
           <div className="pointer-events-none absolute inset-x-0 bottom-0 z-10 p-8">
             <Controls
+              username={username}
               range={range}
-              metricsHidden={metricsHidden}
               onRangeChange={setRange}
-              onToggleMetrics={() => setMetricsHidden((v) => !v)}
+              onDownloadStory={!mock ? openStory : undefined}
+              onGrowAnother={handleGrowAnother}
             />
           </div>
-
-          {/* With sample data there are no real metrics to show. Rendering the
-              user's actual name, avatar and follower count beside fabricated
-              contribution totals reads as though the numbers were theirs. */}
-          {!mock && !metricsHidden && (
-            <div className="pointer-events-none absolute inset-y-0 right-0 z-10 flex items-start justify-end overflow-y-auto p-8 pt-24">
+          {!mock && (
+            <div className="pointer-events-none absolute inset-y-0 inset-x-0 z-10 flex items-start justify-center overflow-y-auto p-8 pt-24 sm:inset-x-auto sm:right-0 sm:justify-end">
               <StatsPanel
                 username={username}
                 profile={profile}
                 total={total}
                 best={best}
                 range={range}
+                metricsHidden={metricsHidden}
+                onToggleMetrics={() => setMetricsHidden((v) => !v)}
               />
             </div>
           )}
 
           {mock && <MockNotice username={username} />}
         </>
+      )}
+      {storyCaptures !== null && (
+        <StoryModal
+          username={username}
+          profile={profile}
+          total={total}
+          best={best}
+          range={range}
+          dayForestUrl={storyCaptures.day}
+          nightForestUrl={storyCaptures.night}
+          timeOfDay={timeOfDay}
+          onClose={() => setStoryCaptures(null)}
+        />
+      )}
+      {internalGrow && (
+        <WelcomeDialog
+          exampleUser={username}
+          onDismiss={() => setInternalGrow(false)}
+          isCancel={true}
+        />
       )}
     </div>
   );

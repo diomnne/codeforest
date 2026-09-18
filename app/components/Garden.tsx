@@ -1,7 +1,7 @@
 "use client";
 
-import { Canvas, useFrame } from "@react-three/fiber";
-import { useMemo, useRef, useState, useSyncExternalStore } from "react";
+import { Canvas, useFrame, useThree } from "@react-three/fiber";
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { buildGardenModel, type GardenModel } from "@/lib/layout";
 import {
   getReducedMotionServerSnapshot,
@@ -16,23 +16,17 @@ import LoadingScreen from "./LoadingScreen";
 import Plants, { type HoverPayload } from "./Plants";
 import Tooltip from "./Tooltip";
 
-/**
- * The single 'use client' boundary for the whole canvas tree. Everything below
- * this file is client-only by inheritance — no scattered directives.
- */
 
 const MORPH_MS = 1200;
 
 type Props = {
   username: string;
-  /** Always the full window. Narrowing is done with `visibleFrom`, not here. */
-  contributions: Contribution[];
-  /** Earliest date to show, as `YYYY-MM-DD`. Days before it fade out. */
-  visibleFrom: string;
+    contributions: Contribution[];
+    visibleFrom: string;
   timeOfDay: TimeOfDay;
+    onRegisterCapture?: (capture: (override?: TimeOfDay) => string) => void;
 };
 
-/** Only one layout remains, but the morph machinery is keyed by mode. */
 const MODE: LayoutMode = "github";
 
 export default function Garden({
@@ -40,10 +34,8 @@ export default function Garden({
   contributions,
   visibleFrom,
   timeOfDay,
+  onRegisterCapture,
 }: Props) {
-  // Built from the full window and kept stable across range changes. Rebuilding
-  // it per range changed each batch's instance count, which remounted the
-  // InstancedMeshes — that is why switching ranges popped instead of animating.
   const model = useMemo(
     () => buildGardenModel(contributions, username),
     [contributions, username],
@@ -55,14 +47,16 @@ export default function Garden({
   const palette = PALETTES[timeOfDay];
 
   const hoveredDay = hover ? model.days[hover.dayIndex] : null;
+  const containerRef = useRef<HTMLDivElement>(null);
 
   return (
+    <div ref={containerRef} className="relative h-full w-full">
     <div className="relative h-full w-full">
       <Canvas
-        // Cap dpr so high-DPI phones don't render at 3x.
         dpr={[1, 1.5]}
         camera={{ fov: 45, near: 0.1, far: 2000, position: [40, 40, 40] }}
         onPointerMissed={() => setHover(null)}
+        gl={{ preserveDrawingBuffer: true }}
       >
         <Scene
           model={model}
@@ -73,12 +67,10 @@ export default function Garden({
           onHover={setHover}
           onReady={() => setReady(true)}
         />
+        {onRegisterCapture && (
+          <CaptureHelper timeOfDay={timeOfDay} onRegister={onRegisterCapture} />
+        )}
       </Canvas>
-
-      {/* The dynamic import's fallback ends when the chunk arrives, but the
-          scene still has geometry to build and a first frame to draw. Hold the
-          loading screen over the canvas until that frame is actually on
-          screen, so the forest never appears half-built. */}
       {!ready && (
         <div className="absolute inset-0 z-10">
           <LoadingScreen />
@@ -89,10 +81,104 @@ export default function Garden({
         <Tooltip day={hoveredDay} x={hover.x} y={hover.y} />
       )}
     </div>
+    </div>
   );
 }
 
-/** Lives inside the Canvas so it can drive animation from the frame loop. */
+function CaptureHelper({
+  timeOfDay,
+  onRegister,
+}: {
+  timeOfDay: TimeOfDay;
+  onRegister: (fn: (override?: TimeOfDay) => string) => void;
+}) {
+  const { gl, scene, camera } = useThree();
+  const timeOfDayRef = useRef(timeOfDay);
+  timeOfDayRef.current = timeOfDay;
+
+  useEffect(() => {
+    onRegister((overrideTheme?: TimeOfDay) => {
+      if (!overrideTheme || overrideTheme === timeOfDayRef.current) {
+        return gl.domElement.toDataURL("image/png");
+      }
+
+      const pal = PALETTES[overrideTheme];
+      const restoreFns: Array<() => void> = [];
+      scene.traverse((obj) => {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const o = obj as any;
+        if (o.isInstancedMesh && o.userData.plantLevel != null) {
+          const level = o.userData.plantLevel as 1 | 2 | 3 | 4;
+          const mat = o.material;
+          if (mat?.color) {
+            const saved = mat.color.getHex();
+            mat.color.set(pal.plant[level]);
+            restoreFns.push(() => mat.color.setHex(saved));
+          }
+        }
+        if (o.isMesh && o.userData.role === "ground") {
+          const mat = o.material;
+          if (mat?.color) {
+            const saved = mat.color.getHex();
+            mat.color.set(pal.ground);
+            restoreFns.push(() => mat.color.setHex(saved));
+          }
+        }
+        if (o.isMesh && o.userData.role === "panel") {
+          const mat = o.material;
+          if (mat?.color) {
+            const saved = mat.color.getHex();
+            mat.color.set(pal.panel);
+            restoreFns.push(() => mat.color.setHex(saved));
+          }
+        }
+        if (o.isDirectionalLight) {
+          const savedColor = o.color.getHex();
+          const savedIntensity = o.intensity;
+          o.color.set(pal.key);
+          o.intensity = pal.keyIntensity;
+          restoreFns.push(() => {
+            o.color.setHex(savedColor);
+            o.intensity = savedIntensity;
+          });
+        }
+        if (o.isAmbientLight) {
+          const savedColor = o.color.getHex();
+          const savedIntensity = o.intensity;
+          o.color.set(pal.ambient);
+          o.intensity = pal.ambientIntensity;
+          restoreFns.push(() => {
+            o.color.setHex(savedColor);
+            o.intensity = savedIntensity;
+          });
+        }
+      });
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const bg = scene.background as any;
+      if (bg?.isColor) {
+        const savedBg = bg.getHex();
+        bg.set(pal.background);
+        restoreFns.push(() => bg.setHex(savedBg));
+      }
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const fog = scene.fog as any;
+      if (fog?.color) {
+        const savedFog = fog.color.getHex();
+        fog.color.set(pal.fog);
+        restoreFns.push(() => fog.color.setHex(savedFog));
+      }
+      gl.render(scene, camera);
+      const url = gl.domElement.toDataURL("image/png");
+      restoreFns.forEach((fn) => fn());
+      gl.render(scene, camera);
+
+      return url;
+    });
+  }, [gl, scene, camera, onRegister]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  return null;
+}
+
 function Scene({
   model,
   mode,
@@ -112,8 +198,6 @@ function Scene({
 }) {
   const anim = useAnimationState(mode, reducedMotion);
   useFirstFrame(onReady);
-  // Eased in the frame loop rather than swapped: a hard cut between day and
-  // night is jarring, and every colour in the scene changes at once.
   const live = usePaletteTween(palette, reducedMotion);
 
   return (
@@ -150,11 +234,6 @@ function Scene({
   );
 }
 
-/**
- * Fires once the scene has actually drawn. Waits a couple of frames rather than
- * one: the first is where instance matrices are written and geometry uploaded,
- * so revealing on it can still catch a partially built forest.
- */
 function useFirstFrame(onReady: () => void) {
   const frames = useRef(0);
   const done = useRef(false);
@@ -171,22 +250,12 @@ function useFirstFrame(onReady: () => void) {
 
 const PALETTE_TWEEN_MS = 700;
 
-/**
- * Eases the whole palette toward `target` over ~0.7s.
- *
- * The tween lives in React state rather than a ref because these values are
- * material and light props, not instance matrices — R3F has to re-render to
- * apply them. That is a handful of cheap prop updates per frame for well under
- * a second, not a per-instance rewrite.
- */
 function usePaletteTween(target: Palette, reducedMotion: boolean): Palette {
   const [current, setCurrent] = useState(target);
   const from = useRef(target);
   const elapsed = useRef(0);
   const active = useRef(false);
   const lastTarget = useRef(target);
-  // The frame loop needs the value it last committed, not the one captured when
-  // this render's closure was created. Written only from inside the loop.
   const currentRef = useRef(target);
 
   useFrame((_, delta) => {
@@ -210,7 +279,6 @@ function usePaletteTween(target: Palette, reducedMotion: boolean): Palette {
 
     elapsed.current += delta * 1000;
     const t = Math.min(1, elapsed.current / PALETTE_TWEEN_MS);
-    // easeInOutSine — no overshoot, which matters for colour.
     const eased = -(Math.cos(Math.PI * t) - 1) / 2;
 
     const next = t >= 1 ? target : mixPalettes(from.current, target, eased);
@@ -243,11 +311,6 @@ function mixPalettes(a: Palette, b: Palette, t: number): Palette {
   };
 }
 
-/**
- * Mixes in sRGB space. Not physically correct, but these are hand-picked
- * palette values rather than measured light, and sRGB keeps the midpoint
- * looking like the colour a designer would have chosen.
- */
 function mixHex(a: string, b: string, t: number): string {
   const ar = parseInt(a.slice(1, 3), 16);
   const ag = parseInt(a.slice(3, 5), 16);
@@ -264,31 +327,15 @@ function mixHex(a: string, b: string, t: number): string {
   )}`;
 }
 
-/**
- * Fog bounds are fixed in world units rather than scaled to the camera
- * distance. Keying them to the camera made the horizon move whenever the
- * framing changed — pulling the camera closer dragged the haze in with it and
- * made the sky feel like it had closed in.
- */
 function SceneFog({ color }: { color: string }) {
   return <fog attach="fog" args={[color, 60, 260]} />;
 }
 
-/**
- * Animation progress lives in a mutable ref advanced inside the R3F frame loop,
- * not in React state: the morph runs for ~1.2s at 60fps, and re-rendering the
- * whole tree on every one of those frames would be pure waste. Only the frame
- * loop reads it, and only to rewrite instance matrices.
- */
 export type AnimationState = {
-  /** Layout being morphed away from. */
-  from: LayoutMode;
-  /** Layout being morphed into. */
-  to: LayoutMode;
-  /** 0..1 eased progress from `from` to `to`. */
-  progress: number;
-  /** 0..1 grow-in factor for the first-load animation. */
-  grow: number;
+    from: LayoutMode;
+    to: LayoutMode;
+    progress: number;
+    grow: number;
 };
 
 function useAnimationState(
@@ -301,23 +348,15 @@ function useAnimationState(
     progress: 1,
     grow: reducedMotion ? 1 : 0,
   });
-  // Read and written only inside the frame loop, never during render, so there
-  // is no ref-during-render hazard.
   const tween = useRef({ requested: mode, elapsed: 0, active: false });
 
   useFrame((_, delta) => {
     const s = state.current;
     const tw = tween.current;
-
-    // Grow-in on first load; skipped entirely under reduced motion.
     if (s.grow < 1) {
       s.grow = reducedMotion ? 1 : Math.min(1, s.grow + delta / 0.9);
     }
-
-    // Pick up a layout change here rather than during render.
     if (tw.requested !== mode) {
-      // Start from wherever the current transition had reached, so switching
-      // mid-morph doesn't snap.
       s.from = s.progress >= 1 ? s.to : resolveCurrent(s);
       s.to = mode;
       s.progress = 0;
@@ -327,7 +366,6 @@ function useAnimationState(
     }
 
     if (reducedMotion) {
-      // Jump straight to the new layout, no animation.
       s.from = mode;
       s.to = mode;
       s.progress = 1;
@@ -339,7 +377,6 @@ function useAnimationState(
 
     tw.elapsed += delta * 1000;
     const t = Math.min(1, tw.elapsed / MORPH_MS);
-    // easeInOutCubic
     s.progress = t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
 
     if (t >= 1) {
@@ -352,11 +389,6 @@ function useAnimationState(
   return state;
 }
 
-/**
- * Interrupting a morph mid-flight would need a third position set to lerp from.
- * Rather than carry one, snap to whichever endpoint is nearer — visually the
- * transition is fast enough that this reads as a direction change, not a jump.
- */
 function resolveCurrent(s: AnimationState): LayoutMode {
   return s.progress > 0.5 ? s.to : s.from;
 }
