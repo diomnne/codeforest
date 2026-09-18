@@ -2,12 +2,6 @@ import type { Contribution } from "@/lib/types";
 
 const LEVEL_COLORS = ["#1d2b1c", "#2f6d2c", "#3f8a34", "#5fa93c", "#9ccf6a"];
 
-/**
- * A flat 2D representation of the same data, rendered on the *server* so it is
- * present in the initial HTML before any JS runs. CSS decides which of this and
- * the canvas is visible, so there's no client-side flash and no dependency on
- * hydration for reduced-motion users.
- */
 export default function StaticGarden({
   username,
   contributions,
@@ -17,7 +11,6 @@ export default function StaticGarden({
   contributions: Contribution[];
   total: number;
 }) {
-  // Same 7 x ~53 arrangement as layout B, as plain squares.
   const first = new Date(`${contributions[0].date}T00:00:00Z`);
   const offset = first.getUTCDay();
   const columns: (Contribution | null)[][] = [];

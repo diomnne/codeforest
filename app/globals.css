@@ -17,24 +17,23 @@
   --ui-fg-muted: #40614c;
   --ui-surface: #f4f7f0;
   --ui-surface-solid: #f4f7f0;
-  --ui-border: #0c1f14;
+  --ui-border: #112320;
   --ui-hover: #dfe8d8;
   --ui-accent: #0c1f14;
   --ui-accent-fg: #f4f7f0;
   --ui-scrim: rgb(12 31 20 / 0.5);
-  /* Neobrutalist offset shadow — a hard block, never a blur. */
-  --ui-shadow: 4px 4px 0 0 var(--ui-border);
-  --ui-shadow-lg: 8px 8px 0 0 var(--ui-border);
+  --ui-shadow: 2px 2px 0 0 var(--ui-border);
+  --ui-shadow-lg: 4px 4px 0 0 var(--ui-border);
 }
 
 [data-theme="night"] {
-  --ui-fg: #e8f5e4;
-  --ui-fg-muted: #8fae95;
-  --ui-surface: #101f30;
-  --ui-surface-solid: #0b1526;
-  --ui-border: #e8f5e4;
-  --ui-hover: #1c3145;
-  --ui-accent: #8fd96a;
+  --ui-fg: #e4f3f5;
+  --ui-fg-muted: #9bc4be;
+  --ui-surface: #131b25;
+  --ui-surface-solid: #131a27;
+  --ui-border: #e3ffeb;
+  --ui-hover: #232f3b;
+  --ui-accent: #e3ffeb;
   --ui-accent-fg: #0b1526;
   --ui-scrim: rgb(4 10 18 / 0.6);
 }
@@ -60,7 +59,7 @@ body {
 @layer components {
   .brut {
     border: 2px solid var(--ui-border);
-    border-radius: 0;
+    border-radius: 0.125rem;
     background: var(--ui-surface);
     box-shadow: var(--ui-shadow);
     transition:
@@ -86,7 +85,7 @@ body {
 }
 
 .brut-press:active {
-  transform: translate(4px, 4px);
+  transform: translate(2px, 2px);
   box-shadow: 0 0 0 0 var(--ui-border);
 }
 

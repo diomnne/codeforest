@@ -3,14 +3,6 @@
 import Link from "next/link";
 import type { ComponentProps, ReactNode } from "react";
 
-/**
- * Shared UI primitives.
- *
- * Every surface in the app is one of these, so the neobrutalist rules —
- * 2px border, zero radius, hard offset shadow, uppercase mono labels — live in
- * one place rather than being re-typed on each element.
- */
-
 type Variant = "default" | "accent";
 
 const VARIANT: Record<Variant, string> = {
@@ -18,7 +10,6 @@ const VARIANT: Record<Variant, string> = {
   accent: "bg-(--ui-accent) text-(--ui-accent-fg)",
 };
 
-/** A bordered, shadowed block. The base surface for cards and dialogs. */
 export function Panel({
   as: Tag = "div",
   large = false,
@@ -41,7 +32,6 @@ export function Panel({
   );
 }
 
-/** Pressable button with the shared press-into-shadow behaviour. */
 export function Button({
   variant = "default",
   className = "",
@@ -62,7 +52,6 @@ export function Button({
   );
 }
 
-/** Same styling as Button, for internal navigation. */
 export function ButtonLink({
   href,
   variant = "default",
@@ -86,10 +75,12 @@ export function ButtonLink({
   );
 }
 
-/**
- * Segmented control — a single bordered group whose options share dividers.
- * Used for the day/night and date-range switches.
- */
+export type SegmentedOption<T extends string> = {
+  value: T;
+  label: string;
+    icon?: ReactNode;
+};
+
 export function Segmented<T extends string>({
   label,
   value,
@@ -98,11 +89,11 @@ export function Segmented<T extends string>({
 }: {
   label: string;
   value: T;
-  options: readonly { value: T; label: string }[];
+  options: readonly SegmentedOption<T>[];
   onChange: (value: T) => void;
 }) {
   return (
-    <div role="group" aria-label={label} className="brut flex items-center">
+    <div role="group" aria-label={label} className="brut overflow-hidden flex items-center">
       {options.map((opt, i) => {
         const active = opt.value === value;
         return (
@@ -111,15 +102,19 @@ export function Segmented<T extends string>({
             type="button"
             onClick={() => onChange(opt.value)}
             aria-pressed={active}
-            className={`brut-theme cursor-pointer px-4 py-2 text-xs font-bold uppercase ${
-              i > 0 ? "border-l-2 border-(--ui-border)" : ""
-            } ${
+            aria-label={opt.icon ? opt.label : undefined}
+            title={opt.icon ? opt.label : undefined}
+            className={`brut-theme flex cursor-pointer items-center justify-center font-bold uppercase ${
+              opt.icon 
+                ? "h-8 w-8 sm:h-10 sm:w-10" 
+                : "px-3 py-1.5 sm:px-4 sm:py-2 text-[10px] sm:text-xs"
+            } ${i > 0 ? "border-l-2 border-(--ui-border)" : ""} ${
               active
                 ? "bg-(--ui-accent) text-(--ui-accent-fg)"
                 : "text-(--ui-fg-muted) hover:bg-(--ui-hover) hover:text-(--ui-fg)"
             }`}
           >
-            {opt.label}
+            {opt.icon ?? opt.label}
           </button>
         );
       })}
@@ -127,7 +122,6 @@ export function Segmented<T extends string>({
   );
 }
 
-/** Small uppercase label used above values and inputs. */
 export function Label({
   as: Tag = "p",
   className = "",
@@ -137,8 +131,7 @@ export function Label({
   as?: "p" | "span" | "label";
   className?: string;
   children: ReactNode;
-  /** `htmlFor` when rendering as a <label>. */
-  htmlFor?: string;
+    htmlFor?: string;
 }) {
   return (
     <Tag
@@ -150,7 +143,6 @@ export function Label({
   );
 }
 
-/** Full-bleed scrim behind a modal dialog. */
 export function Scrim() {
   return <div className="absolute inset-0 bg-(--ui-scrim)" />;
 }

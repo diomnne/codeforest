@@ -1,12 +1,4 @@
-/**
- * Deterministic PRNG helpers.
- *
- * Both the mock data and the garden's positional jitter are seeded off the
- * username, so a given user always grows the exact same garden — which is what
- * makes a shared URL mean something.
- */
 
-/** FNV-1a. Turns a string seed into a well-mixed 32-bit integer. */
 export function hashString(str: string): number {
   let h = 0x811c9dc5;
   for (let i = 0; i < str.length; i++) {
@@ -16,7 +8,6 @@ export function hashString(str: string): number {
   return h >>> 0;
 }
 
-/** mulberry32 — small, fast, good enough distribution for scatter/jitter. */
 export function makeRng(seed: number): () => number {
   let a = seed >>> 0;
   return function next(): number {

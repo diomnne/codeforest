@@ -2,23 +2,21 @@
 
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
+import { SeedlingIcon } from "./icons";
 import { Button, Label, Panel, Scrim } from "./ui";
 
-/**
- * Landing overlay. The sample forest is already rendering behind it, so this
- * dismisses rather than navigates when the user just wants to look around.
- */
 export default function WelcomeDialog({
   exampleUser,
+  onDismiss,
+  isCancel = false,
 }: {
   exampleUser: string;
+  onDismiss: () => void;
+  isCancel?: boolean;
 }) {
-  const [dismissed, setDismissed] = useState(false);
   const [value, setValue] = useState("");
   const [pending, startTransition] = useTransition();
   const router = useRouter();
-
-  if (dismissed) return null;
 
   function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -42,26 +40,28 @@ export default function WelcomeDialog({
           id="welcome-title"
           className="text-xl font-bold tracking-tight text-(--ui-fg) uppercase"
         >
-          GitHub Forest
+          {isCancel ? "Grow Another Forest" : "Welcome to Code Forest!"}
         </h1>
         <p className="mt-4 text-sm leading-relaxed text-(--ui-fg-muted)">
-          Your GitHub contribution graph, grown into a forest you can walk
-          around. Every day becomes a plant — a quiet day is a seedling, your
-          busiest is a tree.
+          Your GitHub contribution graph, planted as a forest.
+          Quiet days grow seedlings, busy ones grow trees.
         </p>
 
-        <Button
-          type="button"
-          variant="accent"
-          onClick={() => setDismissed(true)}
-          className="mt-8 w-full py-3 text-sm"
-        >
-          View an example
-        </Button>
+        {!isCancel && (
+          <Button
+            type="button"
+            variant="accent"
+            onClick={onDismiss}
+            className="mt-8 w-full py-3 text-sm"
+          >
+            <SeedlingIcon className="mr-2 inline-block h-4 w-4" />
+            View an example
+          </Button>
+        )}
 
         <div className="mt-8">
           <Label as="label" htmlFor="welcome-username">
-            Or grow your forest
+            {isCancel ? "GitHub username" : "Or grow your forest"}
           </Label>
           <form onSubmit={submit} className="mt-2 flex gap-2">
             <input
@@ -72,16 +72,36 @@ export default function WelcomeDialog({
               autoComplete="off"
               autoCapitalize="none"
               spellCheck={false}
-              className="brut-theme min-w-0 flex-1 border-2 border-(--ui-border) bg-(--ui-surface-solid) px-4 py-2 text-sm text-(--ui-fg) placeholder:text-(--ui-fg-muted) focus:outline-none"
+              className="brut-theme min-w-0 flex-1 rounded-sm border-2 border-(--ui-border) bg-(--ui-surface-solid) px-4 py-2 text-sm text-(--ui-fg) placeholder:text-(--ui-fg-muted) focus:outline-none"
             />
             <Button
               type="submit"
+              variant="accent"
               disabled={pending || !value.trim()}
               className="shrink-0"
             >
-              {pending ? "…" : "Grow"}
+              {pending ? (
+                "…"
+              ) : (
+                <>
+                  <SeedlingIcon className="mr-1.5 inline-block h-4 w-4" />
+                  Grow
+                </>
+              )}
             </Button>
           </form>
+          <p className="mt-2 text-[10px] uppercase tracking-wider text-(--ui-fg-muted)">
+            * Only works on public contributions for now
+          </p>
+          {isCancel && (
+            <Button
+              type="button"
+              onClick={onDismiss}
+              className="mt-4 w-full py-3 text-sm text-center justify-center"
+            >
+              Cancel
+            </Button>
+          )}
         </div>
 
         <Label className="mt-8 font-normal">

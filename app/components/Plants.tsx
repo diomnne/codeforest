@@ -13,19 +13,13 @@ export type HoverPayload = { dayIndex: number; x: number; y: number } | null;
 
 type Props = {
   model: GardenModel;
-  /** Mutable animation state, advanced in the frame loop (never React state). */
-  anim: RefObject<AnimationState>;
-  /** Earliest date to show; earlier days shrink away. */
-  visibleFrom: string;
+    anim: RefObject<AnimationState>;
+    visibleFrom: string;
   reducedMotion: boolean;
   colors: Record<PlantLevel, string>;
   onHover: (payload: HoverPayload) => void;
 };
 
-/**
- * One InstancedMesh per level (4 batches), not one mesh per day — ~365 separate
- * meshes would mean ~365 draw calls and tank both frame rate and Lighthouse.
- */
 export default function Plants({
   model,
   anim,
@@ -72,15 +66,8 @@ function LevelBatch({
   const meshRef = useRef<InstancedMesh>(null);
   const dummy = useMemo(() => new Object3D(), []);
 
-  /**
-   * A raycast against an InstancedMesh yields an instanceId scoped to *that*
-   * batch. Without this mapping, hover would report the wrong day entirely.
-   */
-  const dayIndices = model.byLevel[level];
+    const dayIndices = model.byLevel[level];
   const count = dayIndices.length;
-
-  // Written matrices lag the target values; we only push to the GPU while the
-  // transition or grow-in is still moving.
   const lastWritten = useRef<{
     progress: number;
     grow: number;
@@ -92,18 +79,9 @@ function LevelBatch({
     from: null,
     to: null,
   });
-
-  // A new model (different user or range) must always be re-uploaded, even if
-  // the batch size and morph state happen to be identical to the last one.
   const writtenFor = useRef<GardenModel | null>(null);
 
-  /**
-   * Per-instance visibility, 0..1, eased toward `wanted` each frame. A day
-   * outside the selected range shrinks to nothing in place rather than being
-   * removed from the batch — which is what keeps the instance count, and so the
-   * mesh itself, stable across range changes.
-   */
-  const shownRef = useRef<Float32Array>(new Float32Array(0));
+    const shownRef = useRef<Float32Array>(new Float32Array(0));
 
   const writeMatrices = useMemo(() => {
     const pos = new Vector3();
@@ -140,9 +118,6 @@ function LevelBatch({
   useFrame((_, delta) => {
     const mesh = meshRef.current;
     if (!mesh) return;
-
-    // Allocated here rather than during render: this buffer is frame-loop
-    // state, and writing a ref while rendering is not allowed.
     if (shownRef.current.length !== count) {
       shownRef.current = new Float32Array(count).fill(1);
     }
@@ -150,9 +125,6 @@ function LevelBatch({
 
     const { from, to, progress, grow } = anim.current;
     const prev = lastWritten.current;
-
-    // Ease each instance toward its wanted visibility, so a range change grows
-    // days in and shrinks them out rather than swapping the forest wholesale.
     let visibilityMoving = false;
     const step = reducedMotion ? 1 : delta / 0.55;
 
@@ -167,9 +139,6 @@ function LevelBatch({
       shown[i] = next;
       visibilityMoving = true;
     }
-
-    // Stop touching instanceMatrix once everything has settled — the upload is
-    // the expensive part, and a static forest needs none.
     if (
       !visibilityMoving &&
       writtenFor.current === model &&
@@ -191,22 +160,16 @@ function LevelBatch({
   return (
     <instancedMesh
       ref={meshRef}
-      // `key` forces a fresh mesh when the batch size changes — a different
-      // user, or a different amount of history. R3F only rebuilds on `args`
-      // *identity*, so without this the old instance buffer would be reused at
-      // the wrong size and every plant would collapse to the origin. Changing
-      // the date range no longer changes `count`, so it no longer remounts.
       key={count}
-      // args order is [geometry, material, count]
       args={[PLANT_GEOMETRIES[level], undefined, count]}
+      userData={{ plantLevel: level }}
       frustumCulled={false}
       castShadow={false}
       receiveShadow={false}
       onPointerMove={(e) => {
         e.stopPropagation();
+        if (e.pointerType === "touch" || e.pointerType === "pen") return;
         if (e.instanceId === undefined) return;
-        // A hidden day is scaled to nothing but still raycastable at its
-        // origin; don't report it.
         if ((shownRef.current[e.instanceId] ?? 1) < 0.5) return;
         onHover({
           dayIndex: dayIndices[e.instanceId],
@@ -214,7 +177,22 @@ function LevelBatch({
           y: e.clientY,
         });
       }}
-      onPointerOut={() => onHover(null)}
+      onPointerOut={(e) => {
+        if (e.pointerType === "touch" || e.pointerType === "pen") return;
+        onHover(null);
+      }}
+      onClick={(e) => {
+        e.stopPropagation();
+        const pointerType = (e.nativeEvent as PointerEvent).pointerType;
+        if (pointerType !== "touch" && pointerType !== "pen") return;
+        if (e.instanceId === undefined) return;
+        if ((shownRef.current[e.instanceId] ?? 1) < 0.5) return;
+        onHover({
+          dayIndex: dayIndices[e.instanceId],
+          x: e.clientX,
+          y: e.clientY,
+        });
+      }}
     >
       <meshLambertMaterial color={color} />
     </instancedMesh>

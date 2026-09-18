@@ -13,22 +13,12 @@ const REQUEST_TIMEOUT_MS = 8000;
 export type FetchResult =
   | {
       ok: true;
-      /** The full past-year window; trim with `sliceRange` for a shorter view. */
-      contributions: Contribution[];
+            contributions: Contribution[];
       mock: boolean;
     }
   | { ok: false; reason: "not-found" }
   | { ok: false; reason: "error"; message: string };
 
-/**
- * Always fetch the full rolling year and narrow it locally: the range selector
- * is a view over one dataset, so switching from 12 months to 3 shouldn't cost
- * another round trip.
- *
- * `?y=last` is required — the API defaults to `y=all`, which returns every year
- * the account has existed. `revalidate: 3600` matches the API's own one-hour
- * cache, so we don't layer a second cache on top of it.
- */
 export async function fetchContributions(
   username: string,
 ): Promise<FetchResult> {
@@ -36,8 +26,6 @@ export async function fetchContributions(
   try {
     res = await fetch(`${API_BASE}/${encodeURIComponent(username)}?y=last`, {
       next: { revalidate: 3600 },
-      // The upstream API intermittently hangs rather than erroring. Without a
-      // bound the page just sits there; better to fail fast and fall back.
       signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
     });
   } catch (err) {
@@ -72,17 +60,11 @@ export async function fetchContributions(
   const contributions = Array.isArray(json?.contributions)
     ? json.contributions
     : [];
-
-  // The API answers 200 with an empty set for some non-existent users.
   if (contributions.length === 0) return { ok: false, reason: "not-found" };
 
   return { ok: true, contributions, mock: false };
 }
 
-/**
- * Trailing slice of the year, aligned to the start of the month so the panel
- * layouts always show whole months.
- */
 export function sliceRange(
   contributions: Contribution[],
   range: RangeKey,
@@ -105,7 +87,6 @@ export function sumCounts(contributions: Contribution[]): number {
   return contributions.reduce((acc, c) => acc + c.count, 0);
 }
 
-/** Highest single-day count in the window, for the stats panel. */
 export function bestDay(
   contributions: Contribution[],
 ): Contribution | null {
@@ -116,10 +97,6 @@ export function bestDay(
   return best && best.count > 0 ? best : null;
 }
 
-/**
- * Seeded stand-in for the API, in the exact same per-day shape. Used
- * automatically when the API is unreachable, so the page always has a forest.
- */
 export function mockContributions(username: string): FetchResult {
   const rng = rngFromSeed(`mock:${username}`);
   const contributions: Contribution[] = [];
@@ -133,8 +110,6 @@ export function mockContributions(username: string): FetchResult {
   const counts: number[] = [];
   for (let d = new Date(start); d <= end; d.setUTCDate(d.getUTCDate() + 1)) {
     const day = d.getUTCDay();
-    // Weekends are quieter, and a slow seasonal swell keeps months from looking
-    // uniform.
     const weekend = day === 0 || day === 6 ? 0.35 : 1;
     const seasonal =
       0.6 + 0.4 * Math.sin((d.getUTCMonth() / 12) * Math.PI * 2 + 1.2);
@@ -160,11 +135,6 @@ export function mockContributions(username: string): FetchResult {
   return { ok: true, contributions, mock: true };
 }
 
-/**
- * Mirrors GitHub's own scheme: level is a per-user relative quartile of the
- * non-zero days, not an absolute count. That's what keeps a quiet year from
- * rendering as an empty field.
- */
 function quartileLevels(counts: number[]): Level[] {
   const nonZero = counts.filter((c) => c > 0).sort((a, b) => a - b);
   if (nonZero.length === 0) return counts.map(() => 0 as Level);

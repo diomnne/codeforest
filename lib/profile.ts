@@ -3,14 +3,6 @@ import type { Profile } from "./types";
 const GITHUB_API = "https://api.github.com";
 const TIMEOUT_MS = 6000;
 
-/**
- * Profile data for the stats panel.
- *
- * Unauthenticated GitHub allows only 60 requests/hour *per IP*, and on a
- * serverless host that IP is shared — so this is cached for a day and every
- * failure is soft. The forest is the product; the stats panel is a garnish and
- * must never be able to take the page down with it.
- */
 export async function fetchProfile(username: string): Promise<Profile | null> {
   try {
     const res = await fetch(`${GITHUB_API}/users/${encodeURIComponent(username)}`, {
@@ -44,11 +36,6 @@ export async function fetchProfile(username: string): Promise<Profile | null> {
   }
 }
 
-/**
- * Most-used languages across the user's own (non-fork) repositories. Counts
- * repositories per language rather than bytes: it needs one request instead of
- * one per repo, which matters a great deal against a 60/hour budget.
- */
 async function fetchTopLanguages(username: string): Promise<string[]> {
   try {
     const res = await fetch(

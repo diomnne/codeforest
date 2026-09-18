@@ -12,7 +12,7 @@ export async function generateMetadata(
 ): Promise<Metadata> {
   const { username } = await props.params;
   return {
-    title: `${username}'s forest — GitHub Forest`,
+    title: `${username}'s forest — Code Forest`,
     description: `A 3D forest grown from ${username}'s past year of GitHub contributions.`,
   };
 }

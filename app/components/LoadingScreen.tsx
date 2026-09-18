@@ -1,10 +1,5 @@
 import { Label, Panel } from "./ui";
 
-/**
- * Shown while the three.js chunk downloads and the first frame is prepared.
- * Uses the theme tokens so it matches whichever sky is about to appear rather
- * than flashing a fixed colour.
- */
 export default function LoadingScreen() {
   return (
     <div
@@ -20,7 +15,6 @@ export default function LoadingScreen() {
   );
 }
 
-/** A seedling that draws itself in — same vocabulary as the scene. */
 function Sprout() {
   return (
     <svg
