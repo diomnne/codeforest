@@ -183,7 +183,8 @@ function LevelBatch({
       }}
       onClick={(e) => {
         e.stopPropagation();
-        if (e.pointerType !== "touch" && e.pointerType !== "pen") return;
+        const pointerType = (e.nativeEvent as PointerEvent).pointerType;
+        if (pointerType !== "touch" && pointerType !== "pen") return;
         if (e.instanceId === undefined) return;
         if ((shownRef.current[e.instanceId] ?? 1) < 0.5) return;
         onHover({
