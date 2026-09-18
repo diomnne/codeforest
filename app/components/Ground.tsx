@@ -13,23 +13,12 @@ type Props = {
   anim: RefObject<AnimationState>;
 };
 
-/**
- * The ground plane plus one soil panel per month in the 4x3 / 6x2 layouts.
- *
- * Panels belong to a specific layout, so each set fades out as the morph moves
- * away from it — driven from the frame loop rather than React state, in step
- * with the instance morph.
- */
 export default function Ground({ model, palette, mode, anim }: Props) {
-  // Fixed, not derived from the data. The camera framing is fixed too, so a
-  // ground plane sized to a one-month layout would show its own edge as a hard
-  // diagonal horizon. Comfortably larger than the fog's far bound, so the plane
-  // has faded into the sky long before it ends.
   const groundSize = 1200;
 
   return (
     <group>
-      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.02, 0]}>
+      <mesh userData={{ role: "ground" }} rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.02, 0]}>
         <planeGeometry args={[groundSize, groundSize]} />
         <meshLambertMaterial color={palette.ground} />
       </mesh>
@@ -48,10 +37,6 @@ export default function Ground({ model, palette, mode, anim }: Props) {
   );
 }
 
-/**
- * One layout's month panels. Visible only while the morph is at or near that
- * layout, so panels from the outgoing layout fade as the incoming ones arrive.
- */
 function PanelSet({
   model,
   panelMode,
@@ -72,9 +57,6 @@ function PanelSet({
   useFrame(() => {
     const group = groupRef.current;
     if (!group) return;
-
-    // `progress` runs 0 -> 1 as the morph settles into the *current* mode, so
-    // these panels are only solid when they are the ones being moved into.
     const target = mode === panelMode ? anim.current.progress : 0;
     const opacity = Math.max(0, Math.min(1, target));
 
@@ -99,14 +81,13 @@ function PanelSet({
       {panels.map((panel) => (
         <mesh
           key={panel.key}
+          userData={{ role: "panel" }}
           rotation={[-Math.PI / 2, 0, 0]}
           position={[panel.center[0], 0.001, panel.center[2]]}
         >
           <planeGeometry
             args={[panel.width + CELL * 0.5, panel.depth + CELL * 0.5]}
           />
-          {/* Each panel gets its own material instance so per-mesh opacity
-              writes in the frame loop don't collide. */}
           <meshBasicMaterial color={color} transparent opacity={0.85} />
         </mesh>
       ))}

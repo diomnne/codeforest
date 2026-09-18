@@ -3,12 +3,6 @@
 import { useState } from "react";
 import { Button, ButtonLink, Panel, Scrim } from "./ui";
 
-/**
- * Shown when the contributions API could not be reached and the forest below is
- * generated sample data. Dismissible, because the point is to let people keep
- * looking at the scene — but stated plainly, since an unlabelled fake forest
- * attributed to a real username would be misleading.
- */
 export default function MockNotice({ username }: { username: string }) {
   const [dismissed, setDismissed] = useState(false);
   if (dismissed) return null;

@@ -7,15 +7,6 @@ import {
 } from "three";
 import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
 
-/**
- * One merged BufferGeometry per level, composed of low-poly primitives.
- *
- * Segment counts are deliberately tiny — this is a rotating demo, not a render.
- * Continuous variation comes from per-instance scale and rotation, not from
- * more geometry.
- *
- * Vertex counts (post-merge, non-indexed) are logged by `plantVertexCount`.
- */
 
 type Part = { geometry: BufferGeometry; transform: Matrix4 };
 
@@ -32,14 +23,8 @@ function place(
 }
 
 function merge(parts: Part[]): BufferGeometry {
-  // CylinderGeometry and ConeGeometry are indexed; IcosahedronGeometry is not.
-  // mergeGeometries requires the index attribute to exist on all inputs or on
-  // none, so normalise everything to non-indexed first — otherwise it returns
-  // null and the plant never builds.
   const applied = parts.map(({ geometry, transform }) => {
     const g = geometry.index ? geometry.toNonIndexed() : geometry.clone();
-    // Keep only position; merging is attribute-sensitive and normals are
-    // recomputed below anyway.
     for (const name of Object.keys(g.attributes)) {
       if (name !== "position") g.deleteAttribute(name);
     }
@@ -53,7 +38,6 @@ function merge(parts: Part[]): BufferGeometry {
   return merged;
 }
 
-/** Level 1 — seedling: a thin stem with two small leaves. */
 function buildSeedling(): BufferGeometry {
   const stem = new CylinderGeometry(0.035, 0.05, 0.42, 5, 1);
   const leafL = new IcosahedronGeometry(0.13, 0);
@@ -70,7 +54,6 @@ function buildSeedling(): BufferGeometry {
   return g;
 }
 
-/** Level 2 — small shrub: a squat clump of foliage. */
 function buildShrub(): BufferGeometry {
   const stem = new CylinderGeometry(0.05, 0.07, 0.3, 5, 1);
   const a = new IcosahedronGeometry(0.26, 0);
@@ -87,7 +70,6 @@ function buildShrub(): BufferGeometry {
   return g;
 }
 
-/** Level 3 — medium flowering bush: fuller canopy plus blossom cones. */
 function buildBush(): BufferGeometry {
   const trunk = new CylinderGeometry(0.07, 0.1, 0.5, 5, 1);
   const a = new IcosahedronGeometry(0.36, 0);
@@ -108,7 +90,6 @@ function buildBush(): BufferGeometry {
   return g;
 }
 
-/** Level 4 — tall flowering tree: the landmark plant of a busy month. */
 function buildTree(): BufferGeometry {
   const trunk = new CylinderGeometry(0.075, 0.13, 1.15, 5, 1);
   const a = new IcosahedronGeometry(0.46, 0);
@@ -131,7 +112,6 @@ function buildTree(): BufferGeometry {
   return g;
 }
 
-/** Index 0 is intentionally absent: level 0 renders nothing but bare soil. */
 export const PLANT_GEOMETRIES: Record<1 | 2 | 3 | 4, BufferGeometry> = {
   1: buildSeedling(),
   2: buildShrub(),
@@ -143,7 +123,6 @@ export function plantVertexCount(level: 1 | 2 | 3 | 4): number {
   return PLANT_GEOMETRIES[level].getAttribute("position").count;
 }
 
-/** Nominal height per level, used to seat tooltips above the plant. */
 export const PLANT_HEIGHT: Record<1 | 2 | 3 | 4, number> = {
   1: 0.55,
   2: 0.72,

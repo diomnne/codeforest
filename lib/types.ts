@@ -6,7 +6,6 @@ export type Contribution = {
   level: Level;
 };
 
-/** Shape returned by github-contributions-api.jogruber.de/v4 */
 export type ContributionsResponse = {
   total: Record<string, number>;
   contributions: Contribution[];
@@ -14,14 +13,8 @@ export type ContributionsResponse = {
 
 export type TimeOfDay = "day" | "night";
 
-/**
- * Layout the scene arranges days in. Only the GitHub strip is exposed in the
- * UI; the numeric month-panel layouts remain in the model because the morph
- * machinery is keyed by mode and they are cheap to keep available.
- */
 export type LayoutMode = "github" | 2 | 3 | 4;
 
-/** Trailing window of contribution data to show. */
 export type RangeKey = "1m" | "3m" | "6m" | "1y";
 
 export const RANGE_OPTIONS: {
@@ -39,7 +32,6 @@ export function monthsForRange(range: RangeKey): number {
   return RANGE_OPTIONS.find((r) => r.value === range)?.months ?? 12;
 }
 
-/** Minimal GitHub profile data for the stats panel. */
 export type Profile = {
   login: string;
   name: string | null;
